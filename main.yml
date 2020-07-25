@@ -1,0 +1,86 @@
+---
+- hosts: staging
+
+  vars:
+    ansible_user: root
+    wp_mysql_db: wp
+    wp_mysql_user: wp
+
+  vars_prompt:
+      - name: wp_mysql_password
+        prompt: "db pass?"
+        private: yes
+
+  tasks:
+    - name: install dependencies
+      apt:
+        update_cache: yes
+        pkg:
+          - apache2
+          - mariadb-server
+          - php
+          - php-gd
+          - php-ssh2
+          - php-mysql
+          - python3-mysqldb
+          - libapache2-mod-php
+
+    - name: create db
+      mysql_db:
+        name: "{{ wp_mysql_db }}"
+        state: present
+
+    - name: create user
+      mysql_user: 
+        name: "{{ wp_mysql_user }}"
+        password: "{{ wp_mysql_password }}"
+        priv: '*.*:ALL'
+        state: present
+
+    - name: wp fetch
+      get_url: 
+        url: "https://wordpress.org/latest.tar.gz"
+        dest: "/tmp/wordpress.tar.gz"
+        validate_certs: no 
+
+    - name: wp unpack
+      unarchive:
+        src: /tmp/wordpress.tar.gz
+        dest: /var/www/
+        copy: no 
+
+    - name: update vhost
+      lineinfile:
+        dest: /etc/apache2/sites-enabled/000-default.conf
+        regexp: "(.)+DocumentRoot /var/www/html"
+        line: "DocumentRoot /var/www/wordpress"
+
+    - name: wp config copy
+      command:
+        cmd: mv /var/www/wordpress/wp-config-sample.php /var/www/wordpress/wp-config.php
+        creates: /var/www/wordpress/wp-config.php
+
+    - name: wp config update
+      lineinfile:
+        dest: /var/www/wordpress/wp-config.php
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+      with_items:
+        - {'regexp': "define\\( 'DB_NAME', '(.)+'\\);", 'line': "define('DB_NAME', '{{wp_mysql_db}}');"}        
+        - {'regexp': "define\\( 'DB_USER', '(.)+'\\);", 'line': "define('DB_USER', '{{wp_mysql_user}}');"}        
+        - {'regexp': "define\\( 'DB_PASSWORD', '(.)+'\\);", 'line': "define('DB_PASSWORD', '{{wp_mysql_password}}');"}
+
+    - name: fix perms
+      file:
+        path: /var/www
+        state: directory
+        recurse: yes
+        owner: www-data
+        group: www-data
+
+    - name: restart apache
+      systemd:
+        name: apache2
+        enabled: yes
+        state: started
+
