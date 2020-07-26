@@ -8,7 +8,7 @@
 
   vars_prompt:
       - name: wp_mysql_password
-        prompt: "db pass?"
+        prompt: "db pass"
         private: yes
 
   tasks:
@@ -57,18 +57,30 @@
 
     - name: wp config copy
       command:
-        cmd: mv /var/www/wordpress/wp-config-sample.php /var/www/wordpress/wp-config.php
+        cmd: cp /var/www/wordpress/wp-config-sample.php /var/www/wordpress/wp-config.php
         creates: /var/www/wordpress/wp-config.php
 
-    - name: wp config update
-      lineinfile:
-        dest: /var/www/wordpress/wp-config.php
-        regexp: "{{ item.regexp }}"
-        line: "{{ item.line }}"
-      with_items:
-        - {'regexp': "define\\( 'DB_NAME', '(.)+'\\);", 'line': "define('DB_NAME', '{{wp_mysql_db}}');"}        
-        - {'regexp': "define\\( 'DB_USER', '(.)+'\\);", 'line': "define('DB_USER', '{{wp_mysql_user}}');"}        
-        - {'regexp': "define\\( 'DB_PASSWORD', '(.)+'\\);", 'line': "define('DB_PASSWORD', '{{wp_mysql_password}}');"}
+    - name: wp config fix
+      command:
+        cmd: dos2unix /var/www/wordpress/wp-config.php
+
+    - name: wp config update db
+      replace:
+        path: /var/www/wordpress/wp-config.php
+        regexp: "define\\( 'DB_NAME', 'database_name_here' \\);"
+        replace: "define( 'DB_NAME', '{{ wp_mysql_db }}' );"
+
+    - name: wp config update user
+      replace:
+        path: /var/www/wordpress/wp-config.php
+        regexp: "define\\( 'DB_USER', 'username_here' \\);"
+        replace: "define( 'DB_USER', '{{ wp_mysql_user }}' );"
+
+    - name: wp config update pass
+      replace:
+        path: /var/www/wordpress/wp-config.php
+        regexp: "define\\( 'DB_PASSWORD', 'password_here' \\);"
+        replace: "define( 'DB_PASSWORD', '{{ wp_mysql_password }}' );"
 
     - name: fix perms
       file:
